@@ -246,6 +246,25 @@
   .field textarea{font-family:var(--mono); font-size:11.5px; min-height:80px;}
   .hint{font-size:11px; color:#9AA1B2; margin-top:4px; line-height:1.5;}
   .save-row{display:flex; gap:8px; margin-top:6px;}
+
+  .user-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; font-size:12.5px;
+  }
+  .user-row .uid{font-family:var(--mono); font-weight:700; color:var(--navy); margin-right:10px;}
+  .user-row button{
+    border:none; background:#FCEBEA; color:var(--bad); font-size:11px; font-weight:700;
+    padding:5px 10px; border-radius:6px;
+  }
+  .user-row button:hover{background:#F6D2CF;}
+  .user-row button:disabled{opacity:.4; cursor:not-allowed;}
+  .add-user-row{display:flex; gap:8px; align-items:flex-end; margin-top:10px; flex-wrap:wrap;}
+  .add-user-row .field{flex:1; min-width:120px; margin-bottom:0;}
+  .add-user-row button{
+    border:none; border-radius:8px; background:var(--navy); color:#fff; font-weight:700;
+    font-size:12.5px; padding:9px 16px; height:38px;
+  }
+  .add-user-row button:hover{background:var(--navy-deep);}
   .toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
     background:var(--navy); color:#fff; padding:11px 18px; border-radius:10px; font-size:13px;
@@ -405,6 +424,23 @@
           <div class="hint">
             firebase.google.com(무료 Spark 플랜)에서 프로젝트를 만들고 Firestore Database를 사용 설정한 뒤, 프로젝트 설정 &gt; 일반 &gt; SDK 설정값의 config 객체를 그대로 붙여넣으세요.
             같은 설정값을 팀원 모두가 입력하면 오늘 작성중인 체크리스트를 실시간으로 함께 작성/공유할 수 있습니다. 비워두면 이 기기에만 저장됩니다.
+          </div>
+        </div>
+
+        <div class="field-group">
+          <h3>사용자 관리 <span class="hint" style="margin:0;">(로그인 가능한 사번 ID)</span></h3>
+          <div class="desc" style="margin-bottom:10px;">여기 등록된 사번 ID로만 앱에 로그인할 수 있습니다. 아래에서 사용자를 추가하거나 삭제할 수 있습니다. (최소 1명은 남아 있어야 합니다.)</div>
+          <div id="userListContainer"></div>
+          <div class="add-user-row">
+            <div class="field">
+              <label>사번 ID (5자리)</label>
+              <input type="text" id="newUserId" maxlength="5" placeholder="예: A1234" style="text-transform:uppercase;">
+            </div>
+            <div class="field">
+              <label>이름</label>
+              <input type="text" id="newUserName" placeholder="이름 입력">
+            </div>
+            <button id="btnAddUser">추가</button>
           </div>
         </div>
 
@@ -910,6 +946,7 @@ function fillSettingsForm(){
   document.getElementById('setFrom').value = settings.from || '';
   document.getElementById('setTo').value = settings.to || '';
   document.getElementById('setFirebaseConfig').value = settings.firebaseConfig || '';
+  renderUserList();
 }
 
 document.getElementById('btnSaveSettings').addEventListener('click', ()=>{
@@ -920,6 +957,62 @@ document.getElementById('btnSaveSettings').addEventListener('click', ()=>{
   initFirebase();
   showToast('설정이 저장되었습니다.');
 });
+
+/* ---- User management (login IDs) ---- */
+function renderUserList(){
+  const container = document.getElementById('userListContainer');
+  const ids = Object.keys(USERS);
+  container.innerHTML = ids.map(id => `
+    <div class="user-row" data-id="${escapeAttr(id)}">
+      <div><span class="uid">${escapeHtml(id)}</span>${escapeHtml(USERS[id])}</div>
+      <button class="btnRemoveUser" data-id="${escapeAttr(id)}" ${ids.length<=1?'disabled':''}>삭제</button>
+    </div>
+  `).join('');
+  container.querySelectorAll('.btnRemoveUser').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      if(Object.keys(USERS).length <= 1){
+        showToast('최소 1명은 남아 있어야 합니다.');
+        return;
+      }
+      if(!confirm(`${USERS[id]} (${id}) 사용자를 삭제할까요?`)) return;
+      delete USERS[id];
+      saveUsers();
+      renderUserList();
+      showToast('사용자가 삭제되었습니다.');
+    });
+  });
+}
+
+document.getElementById('btnAddUser').addEventListener('click', addUserFromForm);
+document.getElementById('newUserName').addEventListener('keydown', e=>{ if(e.key==='Enter') addUserFromForm(); });
+document.getElementById('newUserId').addEventListener('keydown', e=>{ if(e.key==='Enter') addUserFromForm(); });
+
+function addUserFromForm(){
+  const idInput = document.getElementById('newUserId');
+  const nameInput = document.getElementById('newUserName');
+  const id = idInput.value.trim().toUpperCase();
+  const name = nameInput.value.trim();
+
+  if(id.length !== 5){
+    showToast('사번 ID는 5자리로 입력해 주세요.');
+    return;
+  }
+  if(!name){
+    showToast('이름을 입력해 주세요.');
+    return;
+  }
+  if(USERS[id]){
+    showToast('이미 등록된 ID입니다.');
+    return;
+  }
+  USERS[id] = name;
+  saveUsers();
+  idInput.value = '';
+  nameInput.value = '';
+  renderUserList();
+  showToast(`${name} (${id}) 님이 추가되었습니다.`);
+}
 
 /* =========================================================
    10. PDF GENERATION
@@ -951,9 +1044,10 @@ function buildPrintTemplate(){
       return;
     }
     const st = data.items[row.id] || {count:'', result:'Y'};
+    const countDisplay = (st.count === '' || st.count === null || st.count === undefined) ? '0' : st.count;
     rows += `<tr>
       <td style="padding:5px 8px;border:1px solid #D8DAE2;font-size:11px;">${escapeHtml(row.label)}</td>
-      <td style="padding:5px 8px;border:1px solid #D8DAE2;font-size:11px;text-align:center;font-family:monospace;">${escapeHtml(st.count)}</td>
+      <td style="padding:5px 8px;border:1px solid #D8DAE2;font-size:11px;text-align:center;font-family:monospace;">${escapeHtml(countDisplay)}</td>
       <td style="padding:5px 8px;border:1px solid #D8DAE2;font-size:11px;text-align:center;font-weight:700;
         color:${st.result==='N' ? '#B23A2E' : '#1E9E63'};">${st.result}</td>
     </tr>`;
@@ -1128,7 +1222,7 @@ function init(){
 /* =========================================================
    14. LOGIN — 사번 5자리 ID
 ========================================================= */
-const USERS = {
+const DEFAULT_USERS = {
   '71213': '김광석',
   'F1211': '남윤호',
   'J0919': '최한민',
@@ -1136,6 +1230,24 @@ const USERS = {
   'Q0601': '장동현'
 };
 const LS_USER = 'kardian_user_v1';
+const LS_USERS = 'kardian_users_v1';
+
+function loadUsers(){
+  try{
+    const raw = localStorage.getItem(LS_USERS);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === 'object' && Object.keys(parsed).length){
+        return parsed;
+      }
+    }
+  }catch(e){}
+  return {...DEFAULT_USERS};
+}
+function saveUsers(){
+  localStorage.setItem(LS_USERS, JSON.stringify(USERS));
+}
+let USERS = loadUsers();
 
 function getCurrentUser(){
   try{
