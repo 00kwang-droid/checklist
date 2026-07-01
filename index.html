@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2A4A">
+<title>Kardian Daily Checklist</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+
+<!-- PDF & capture -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Email sending -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- Firebase (optional team sync) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --navy:#1B2A4A;
+    --navy-deep:#101a30;
+    --accent:#3B5BFF;
+    --accent-soft:#EEF1FF;
+    --purple:#C6C1F7;
+    --purple-text:#3B336B;
+    --bg:#F3F4F8;
+    --card:#FFFFFF;
+    --line:#E2E4EC;
+    --text:#1F2430;
+    --text-dim:#6B7280;
+    --good:#1E9E63;
+    --bad:#D6483C;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    --radius: 12px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  body{padding-bottom:60px;}
+  button{font-family:inherit;cursor:pointer;}
+  input,textarea,select{font-family:inherit;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    background:var(--navy); color:#fff;
+    padding:14px 18px;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow:0 2px 10px rgba(16,26,48,.25);
+  }
+  .brand{display:flex; align-items:baseline; gap:10px;}
+  .brand .mark{
+    width:28px;height:28px;border-radius:8px;background:var(--accent);
+    display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;
+    flex:none;
+  }
+  .brand h1{font-size:15px; margin:0; font-weight:700; letter-spacing:.2px;}
+  .brand .sub{font-size:11px; color:#B9C2DD; font-weight:400;}
+  .tabs{display:flex; gap:4px; background:rgba(255,255,255,.08); border-radius:10px; padding:3px;}
+  .tabs button{
+    border:none; background:transparent; color:#C9D1EA; font-size:12.5px; font-weight:600;
+    padding:7px 13px; border-radius:8px; transition:all .15s;
+  }
+  .tabs button.active{background:#fff; color:var(--navy);}
+
+  .wrap{max-width:820px; margin:0 auto; padding:18px 14px 40px;}
+
+  /* ---------- Sync badge ---------- */
+  .status-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
+    padding:5px 10px; border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--text-dim);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:#B7BCC9;}
+  .dot.on{background:var(--good);}
+  .dot.off{background:#C9A227;}
+
+  /* ---------- Print card (this is what becomes the PDF) ---------- */
+  .sheet{
+    background:var(--card); border-radius:var(--radius); border:1px solid var(--line);
+    padding:26px 22px; box-shadow:0 1px 3px rgba(16,26,48,.05);
+  }
+  .sheet-head{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;}
+  .sheet-date{font-family:var(--mono); font-size:13px; color:var(--text-dim);}
+  .sheet-title{font-size:19px; font-weight:800; color:var(--navy); margin:6px 0 2px;}
+  .sheet-to{font-size:12.5px; color:var(--text-dim); margin-bottom:16px;}
+
+  table.chk{width:100%; border-collapse:collapse; font-size:13px;}
+  table.chk th{
+    background:var(--navy); color:#fff; font-size:11.5px; font-weight:700;
+    padding:8px 10px; text-align:left;
+  }
+  table.chk td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  table.chk tr.section td{
+    background:var(--purple); color:var(--purple-text); font-weight:700; font-size:12.5px;
+  }
+  table.chk tr.item td{background:#fff;}
+  table.chk tr.item:hover td{background:#FAFBFF;}
+  .col-desc{width:56px; text-align:center;}
+  .col-count{width:110px;}
+  .col-result{width:150px;}
+
+  .item-label{display:flex; align-items:center; gap:6px;}
+  .info-btn{
+    width:17px;height:17px;border-radius:50%;background:var(--accent-soft); color:var(--accent);
+    border:1px solid #D6DEFF; font-size:10.5px; font-weight:800; line-height:1;
+    display:inline-flex; align-items:center; justify-content:center; flex:none;
+  }
+  .info-btn:hover{background:var(--accent); color:#fff;}
+
+  .count-input{
+    width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:7px;
+    font-family:var(--mono); font-size:13px; text-align:right;
+  }
+  .count-input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+
+  .yn-group{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .yn-group button{
+    border:none; background:#fff; padding:5px 12px; font-size:12px; font-weight:700; color:var(--text-dim);
+  }
+  .yn-group button.sel-y.on{background:var(--good); color:#fff;}
+  .yn-group button.sel-n.on{background:var(--bad); color:#fff;}
+  .yn-group button:not(:last-child){border-right:1px solid var(--line);}
+
+  .note-box{
+    margin-top:14px; border:1px solid var(--line); border-radius:10px; padding:12px;
+    background:#FAFBFD;
+  }
+  .note-box .label{font-size:11px; font-weight:700; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px;}
+  .note-box textarea{
+    width:100%; border:none; background:transparent; resize:vertical; min-height:44px;
+    font-size:13px; color:var(--text); line-height:1.5;
+  }
+  .note-box textarea:focus{outline:none;}
+
+  .confirm-line{font-size:12px; color:var(--text-dim); margin:16px 2px 8px; font-style:italic;}
+
+  .sign-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px;}
+  .sign-block{border:1px solid var(--line); border-radius:10px; padding:12px;}
+  .sign-block .role{font-size:11.5px; font-weight:700; color:var(--navy); margin-bottom:8px;}
+  .sign-block input[type=text]{
+    width:100%; border:none; border-bottom:1px solid var(--line); padding:4px 2px 8px;
+    font-size:13px; margin-bottom:8px; background:transparent;
+  }
+  .sign-block input[type=text]:focus{outline:none; border-bottom-color:var(--accent);}
+  .sign-pad-wrap{position:relative;}
+  canvas.sigpad{
+    width:100%; height:90px; background:#fcfcfe; border:1px dashed #D5D9E4; border-radius:8px; touch-action:none;
+  }
+  .sig-clear{
+    position:absolute; top:6px; right:6px; font-size:10.5px; padding:3px 7px; border-radius:6px;
+    background:#fff; border:1px solid var(--line); color:var(--text-dim);
+  }
+  .sig-placeholder{position:absolute; left:10px; top:36px; font-size:11px; color:#B7BCC9; pointer-events:none;}
+
+  /* ---------- Action bar ---------- */
+  .actions{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
+  .btn{
+    border:none; border-radius:10px; padding:11px 16px; font-size:13px; font-weight:700;
+    display:inline-flex; align-items:center; gap:7px;
+  }
+  .btn-primary{background:var(--navy); color:#fff;}
+  .btn-primary:hover{background:var(--navy-deep);}
+  .btn-accent{background:var(--accent); color:#fff;}
+  .btn-accent:hover{background:#2C48E0;}
+  .btn-ghost{background:#fff; border:1px solid var(--line); color:var(--text);}
+  .btn-ghost:hover{background:#F5F6FA;}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  /* ---------- Settings ---------- */
+  .settings-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px;}
+  .settings-card h2{font-size:15px; color:var(--navy); margin:0 0 4px;}
+  .settings-card .desc{font-size:12px; color:var(--text-dim); margin-bottom:16px;}
+  .field-group{margin-bottom:20px; padding-bottom:18px; border-bottom:1px solid var(--line);}
+  .field-group:last-of-type{border-bottom:none;}
+  .field-group h3{font-size:12.5px; font-weight:700; color:var(--navy); margin:0 0 10px; display:flex; align-items:center; gap:6px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block; font-size:11.5px; font-weight:600; color:var(--text-dim); margin-bottom:4px;}
+  .field input, .field textarea{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;
+  }
+  .field textarea{font-family:var(--mono); font-size:11.5px; min-height:80px;}
+  .hint{font-size:11px; color:#9AA1B2; margin-top:4px; line-height:1.5;}
+  .save-row{display:flex; gap:8px; margin-top:6px;}
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--navy); color:#fff; padding:11px 18px; border-radius:10px; font-size:13px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25); z-index:100; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px);}
+
+  /* ---------- Info popover ---------- */
+  .popover{
+    position:fixed; z-index:80; max-width:260px; background:var(--navy); color:#fff;
+    font-size:12px; line-height:1.5; padding:10px 12px; border-radius:9px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25); display:none;
+  }
+  .popover.show{display:block;}
+
+  @media (max-width:520px){
+    .sign-grid{grid-template-columns:1fr;}
+    table.chk{font-size:12px;}
+    .col-count{width:80px;}
+    .col-result{width:120px;}
+  }
+
+  @media print{
+    .topbar, .actions, .status-row{display:none !important;}
+    body{background:#fff;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">K</span>
+      <div>
+        <h1>Kardian Daily Checklist</h1>
+        <div class="sub">Shinhan Fund Partners</div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button id="tabChecklistBtn" class="active">체크리스트</button>
+      <button id="tabSettingsBtn">설정</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ============ CHECKLIST VIEW ============ -->
+    <div id="viewChecklist">
+      <div class="status-row">
+        <span class="badge"><span id="syncDot" class="dot off"></span><span id="syncText">로컬 저장 모드 (팀 공유 미설정)</span></span>
+        <span class="badge">불러온 날짜: <strong id="badgeDate" style="margin-left:4px;"></strong></span>
+      </div>
+
+      <div class="sheet" id="printArea">
+        <div class="sheet-head">
+          <div>
+            <div class="sheet-date" id="dateLabel">Date : </div>
+            <div class="sheet-title">Daily NAV and Valuation Review</div>
+            <div class="sheet-to">To : Kardian Asset Management Co. LTD.</div>
+          </div>
+        </div>
+
+        <table class="chk">
+          <thead>
+            <tr>
+              <th style="width:auto;">Description</th>
+              <th class="col-desc">설명</th>
+              <th class="col-count">No. of Count</th>
+              <th class="col-result">Checking Result</th>
+            </tr>
+          </thead>
+          <tbody id="checklistBody"></tbody>
+        </table>
+
+        <div class="note-box">
+          <div class="label">7. Etc — 금일 특이사항</div>
+          <textarea id="specialNote" rows="2"></textarea>
+        </div>
+
+        <div class="confirm-line">Confirm the above mentioned details are all correct.</div>
+
+        <div class="sign-grid">
+          <div class="sign-block" data-role="checker">
+            <div class="role">Checked By</div>
+            <input type="text" id="checkerName" placeholder="이름 입력">
+            <div class="sign-pad-wrap">
+              <span class="sig-placeholder" id="checkerPlaceholder">여기에 서명하세요</span>
+              <canvas class="sigpad" id="checkerPad"></canvas>
+              <button class="sig-clear" data-target="checker">지우기</button>
+            </div>
+          </div>
+          <div class="sign-block" data-role="reviewer">
+            <div class="role">Reviewed By</div>
+            <input type="text" id="reviewerName" placeholder="이름 입력">
+            <div class="sign-pad-wrap">
+              <span class="sig-placeholder" id="reviewerPlaceholder">여기에 서명하세요</span>
+              <canvas class="sigpad" id="reviewerPad"></canvas>
+              <button class="sig-clear" data-target="reviewer">지우기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="btnSendMail">✉ 메일 발송 (PDF 첨부)</button>
+        <button class="btn btn-accent" id="btnPdf">⬇ PDF 저장</button>
+        <button class="btn btn-ghost" id="btnResetYN">Y로 초기화</button>
+        <button class="btn btn-ghost" id="btnClearAll">전체 초기화</button>
+      </div>
+    </div>
+
+    <!-- ============ SETTINGS VIEW ============ -->
+    <div id="viewSettings" style="display:none;">
+      <div class="settings-card">
+        <h2>이메일 설정</h2>
+        <div class="desc">체크리스트를 발송할 때 사용할 보내는 사람 / 받는 사람 주소를 관리합니다. 콤마(,)로 구분해 여러 명을 받는 사람으로 지정할 수 있습니다.</div>
+
+        <div class="field-group">
+          <h3>주소</h3>
+          <div class="field"><label>보내는 사람 이메일</label><input type="text" id="setFrom" placeholder="kskim01@shinhan.com"></div>
+          <div class="field"><label>받는 사람 이메일</label><input type="text" id="setTo" placeholder="00kwang@gmail.com"></div>
+          <div class="field"><label>메일 제목</label><input type="text" id="setSubject" placeholder="[Kardian] Daily NAV Checklist"></div>
+        </div>
+
+        <div class="field-group">
+          <h3>EmailJS 발송 설정 <span class="hint" style="margin:0;">(자동 발송에 필요)</span></h3>
+          <div class="field"><label>Service ID</label><input type="text" id="setEmailjsService" placeholder="service_xxxxxxx"></div>
+          <div class="field"><label>Template ID</label><input type="text" id="setEmailjsTemplate" placeholder="template_xxxxxxx"></div>
+          <div class="field"><label>Public Key</label><input type="text" id="setEmailjsKey" placeholder="public key"></div>
+          <div class="hint">
+            emailjs.com에서 무료 계정을 만들고 서비스(SMTP/Gmail 등)와 템플릿을 연결하세요. 템플릿에 <code>{{to_email}}</code>, <code>{{from_email}}</code>, <code>{{subject}}</code>, <code>{{message}}</code> 변수를 넣고,
+            템플릿의 첨부파일(Attachments) 항목을 동적 변수 <code>{{pdf_attachment}}</code>로 연결하면 PDF가 자동 첨부됩니다. 설정하지 않으면 PDF를 다운로드한 뒤 메일 앱에서 수동으로 첨부하는 방식으로 대체됩니다.
+          </div>
+        </div>
+
+        <div class="field-group">
+          <h3>팀 공유 (Firebase) <span class="hint" style="margin:0;">(선택 사항)</span></h3>
+          <div class="field">
+            <label>Firebase 설정 JSON</label>
+            <textarea id="setFirebaseConfig" placeholder='{"apiKey":"...","projectId":"...","appId":"..."}'></textarea>
+          </div>
+          <div class="hint">
+            firebase.google.com(무료 Spark 플랜)에서 프로젝트를 만들고 Firestore Database를 사용 설정한 뒤, 프로젝트 설정 &gt; 일반 &gt; SDK 설정값의 config 객체를 그대로 붙여넣으세요.
+            같은 설정값을 팀원 모두가 입력하면 같은 날짜의 체크리스트를 실시간으로 함께 작성/공유할 수 있습니다. 비워두면 이 기기에만 저장됩니다.
+          </div>
+        </div>
+
+        <div class="save-row">
+          <button class="btn btn-primary" id="btnSaveSettings">설정 저장</button>
+          <button class="btn btn-ghost" id="btnTestMail">테스트 메일 발송</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="popover" id="popover"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   1. CHECKLIST DATA  (mirrors 카디안체크리스트.xlsx)
+========================================================= */
+const CHECKLIST = [
+  { type:'section', title:'1. Creation of static data' },
+  { type:'item', id:'i11a', label:'1.1 New Fund', desc:'신규펀드 수' },
+  { type:'item', id:'i11b', label:'1.1 New Security', desc:'해외신규종목(주식,채권,수익증권), 38501화면에서 new 신규종목' },
+  { type:'item', id:'i13',  label:'1.3 Issuer etc', desc:'' },
+
+  { type:'section', title:'2. Prices update' },
+  { type:'item', id:'i21', label:'2.1 Securities', desc:'(종가검증report 49406화면) 해외주식,수익증권,채권보유분' },
+  { type:'item', id:'i22', label:'2.2 FX', desc:'(종가검증report 49406화면) 포워드보유분' },
+  { type:'item', id:'i23', label:'2.3 Derivatives', desc:'(종가검증report 49406화면) 장내파생보유분' },
+
+  { type:'section', title:'3. Price variance review' },
+  { type:'item', id:'i31', label:'3.1 Securities', desc:'(종가검증report 49406화면) 해외주식,수익증권 7%초과분' },
+  { type:'item', id:'i32', label:'3.2 FX', desc:'(종가검증report 49406화면) 포워드 괴리율 1%' },
+  { type:'item', id:'i33', label:'3.3 Derivatives', desc:'' },
+
+  { type:'section', title:'4. Coporate action processing' },
+  { type:'item', id:'i41', label:'4.1 Dividend', desc:'배당금, 배당금신규 (38513화면)' },
+  { type:'item', id:'i42', label:'4.2 Rights offering / Free issue of new share', desc:'' },
+  { type:'item', id:'i43', label:'4.3 Meger / Divestitures / Reduce company', desc:'' },
+  { type:'item', id:'i44', label:'4.4 List up securities', desc:'' },
+  { type:'item', id:'i46', label:'4.6 Other', desc:'' },
+
+  { type:'section', title:'5. Closing funds Check' },
+  { type:'item', id:'i51', label:'5.1 Dividend', desc:'결산펀드체크 - 분배금대상펀드' },
+
+  { type:'section', title:'6. NAV movement check' },
+  { type:'item', id:'i61', label:'6.1 Stalled Price Check', desc:'무변동(기본3일체크, 월요일에는 5일체크)' },
+  { type:'item', id:'i62', label:'6.2 Price release in time(KSD)', desc:'얘탁펀드 (운용사별처리현황(Daily)(88130)' },
+];
+const DEFAULT_NOTE = '금일 특이사항 없습니다.';
+
+/* =========================================================
+   2. STATE / STORAGE
+========================================================= */
+function todayStr(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+const TODAY = todayStr();
+const LS_SETTINGS = 'kardian_settings_v1';
+const LS_DATA_PREFIX = 'kardian_data_'; // + date
+
+let settings = loadSettings();
+let data = null; // current day's data
+let fsUnsub = null;
+let db = null;
+let saveTimer = null;
+
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(LS_SETTINGS);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {
+    from: 'kskim01@shinhan.com',
+    to: '00kwang@gmail.com',
+    subject: '[Kardian] Daily NAV Checklist',
+    emailjsService:'', emailjsTemplate:'', emailjsKey:'',
+    firebaseConfig:''
+  };
+}
+function saveSettingsToStorage(){
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+}
+
+function defaultData(){
+  const items = {};
+  CHECKLIST.filter(x=>x.type==='item').forEach(it=>{
+    items[it.id] = { count:'', result:'Y' };
+  });
+  return {
+    date: TODAY,
+    items,
+    specialNote: DEFAULT_NOTE,
+    checkerName:'', checkerSig:'',
+    reviewerName:'', reviewerSig:'',
+    updatedAt: Date.now()
+  };
+}
+
+function loadLocalData(){
+  try{
+    const raw = localStorage.getItem(LS_DATA_PREFIX+TODAY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return defaultData();
+}
+function saveLocalData(){
+  localStorage.setItem(LS_DATA_PREFIX+TODAY, JSON.stringify(data));
+}
+
+/* =========================================================
+   3. FIREBASE (optional team sync)
+========================================================= */
+function initFirebase(){
+  if(!settings.firebaseConfig || !settings.firebaseConfig.trim()){
+    setSyncBadge(false, '로컬 저장 모드 (팀 공유 미설정)');
+    return;
+  }
+  try{
+    const cfg = JSON.parse(settings.firebaseConfig);
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
+    db = firebase.firestore();
+    setSyncBadge(true, '팀 공유 연결됨 (Firestore)');
+    subscribeCloud();
+  }catch(e){
+    console.error('Firebase init failed', e);
+    setSyncBadge(false, 'Firebase 설정 오류 — 로컬 저장 모드');
+  }
+}
+function setSyncBadge(on, text){
+  document.getElementById('syncDot').className = 'dot ' + (on?'on':'off');
+  document.getElementById('syncText').textContent = text;
+}
+function subscribeCloud(){
+  if(!db) return;
+  if(fsUnsub) fsUnsub();
+  fsUnsub = db.collection('checklists').doc(TODAY).onSnapshot(doc=>{
+    if(doc.exists){
+      const remote = doc.data();
+      // avoid clobbering local edits with a stale echo of what we just wrote
+      if(!data || remote.updatedAt > (data.updatedAt||0)){
+        data = remote;
+        saveLocalData();
+        renderAll();
+      }
+    } else {
+      // first writer seeds the cloud doc
+      db.collection('checklists').doc(TODAY).set(data);
+    }
+  }, err=>{
+    console.error(err);
+    setSyncBadge(false, '동기화 오류 — 로컬 저장 모드');
+  });
+}
+function pushCloud(){
+  data.updatedAt = Date.now();
+  saveLocalData();
+  if(db){
+    db.collection('checklists').doc(TODAY).set(data).catch(e=>console.error(e));
+  }
+}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushCloud, 350);
+}
+
+/* =========================================================
+   4. RENDER
+========================================================= */
+function renderAll(){
+  document.getElementById('dateLabel').textContent = 'Date : ' + data.date;
+  document.getElementById('badgeDate').textContent = data.date;
+  renderTable();
+  document.getElementById('specialNote').value = data.specialNote ?? DEFAULT_NOTE;
+  document.getElementById('checkerName').value = data.checkerName || '';
+  document.getElementById('reviewerName').value = data.reviewerName || '';
+  drawSigFromData('checker');
+  drawSigFromData('reviewer');
+}
+
+function renderTable(){
+  const body = document.getElementById('checklistBody');
+  body.innerHTML = '';
+  CHECKLIST.forEach(row=>{
+    if(row.type==='section'){
+      const tr = document.createElement('tr');
+      tr.className = 'section';
+      tr.innerHTML = `<td colspan="4">${escapeHtml(row.title)}</td>`;
+      body.appendChild(tr);
+      return;
+    }
+    const st = data.items[row.id] || {count:'', result:'Y'};
+    const tr = document.createElement('tr');
+    tr.className = 'item';
+    tr.innerHTML = `
+      <td>
+        <div class="item-label">
+          <span>${escapeHtml(row.label)}</span>
+        </div>
+      </td>
+      <td class="col-desc">
+        ${row.desc ? `<button class="info-btn" data-desc="${escapeAttr(row.desc)}" title="설명 보기">i</button>` : ''}
+      </td>
+      <td class="col-count">
+        <input type="number" inputmode="numeric" class="count-input" data-id="${row.id}" value="${escapeAttr(st.count)}" placeholder="0">
+      </td>
+      <td class="col-result">
+        <div class="yn-group" data-id="${row.id}">
+          <button class="sel-y ${st.result==='Y'?'on':''}" data-val="Y">Y</button>
+          <button class="sel-n ${st.result==='N'?'on':''}" data-val="N">N</button>
+        </div>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll('.count-input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const id = e.target.dataset.id;
+      data.items[id].count = e.target.value;
+      scheduleSave();
+    });
+  });
+  body.querySelectorAll('.yn-group').forEach(grp=>{
+    grp.querySelectorAll('button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = grp.dataset.id;
+        data.items[id].result = btn.dataset.val;
+        grp.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+        btn.classList.add('on');
+        scheduleSave();
+      });
+    });
+  });
+  body.querySelectorAll('.info-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=> showPopover(e.target, e.target.dataset.desc));
+  });
+}
+
+function escapeHtml(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+
+/* =========================================================
+   5. INFO POPOVER
+========================================================= */
+function showPopover(anchor, text){
+  const pop = document.getElementById('popover');
+  if(pop.classList.contains('show') && pop.dataset.for === text){
+    pop.classList.remove('show'); return;
+  }
+  pop.textContent = text;
+  pop.dataset.for = text;
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(window.innerWidth-268, r.left-120)) + 'px';
+  pop.style.top = (r.bottom + 8) + 'px';
+  pop.classList.add('show');
+}
+document.addEventListener('click', (e)=>{
+  const pop = document.getElementById('popover');
+  if(!e.target.classList.contains('info-btn') && !pop.contains(e.target)){
+    pop.classList.remove('show');
+  }
+});
+
+/* =========================================================
+   6. SIGNATURE PADS
+========================================================= */
+const pads = {}; // role -> {canvas, ctx, drawing}
+function setupSigPad(role){
+  const canvas = document.getElementById(role+'Pad');
+  const ratio = window.devicePixelRatio || 1;
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#1B2A4A';
+    pads[role] = { canvas, ctx, drawing:false, hasInk: !!(data[role+'Sig']) };
+    drawSigFromData(role);
+  }
+  resize();
+
+  const pos = (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX-rect.left, y: t.clientY-rect.top };
+  };
+  const start = (e)=>{ e.preventDefault(); const p = pads[role]; p.drawing = true; const {x,y}=pos(e); p.ctx.beginPath(); p.ctx.moveTo(x,y); document.getElementById(role+'Placeholder').style.display='none'; };
+  const move = (e)=>{ const p = pads[role]; if(!p.drawing) return; e.preventDefault(); const {x,y}=pos(e); p.ctx.lineTo(x,y); p.ctx.stroke(); };
+  const end = ()=>{ const p = pads[role]; if(!p.drawing) return; p.drawing=false; p.hasInk = true; data[role+'Sig'] = canvas.toDataURL('image/png'); scheduleSave(); };
+
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  canvas.addEventListener('touchend', end);
+}
+function drawSigFromData(role){
+  const p = pads[role];
+  if(!p) return;
+  const canvas = p.canvas, ctx = p.ctx;
+  const rect = canvas.getBoundingClientRect();
+  ctx.clearRect(0,0,rect.width,rect.height);
+  const ph = document.getElementById(role+'Placeholder');
+  if(data[role+'Sig']){
+    ph.style.display = 'none';
+    const img = new Image();
+    img.onload = ()=> ctx.drawImage(img, 0, 0, rect.width, rect.height);
+    img.src = data[role+'Sig'];
+  } else {
+    ph.style.display = 'block';
+  }
+}
+document.querySelectorAll('.sig-clear').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const role = btn.dataset.target;
+    data[role+'Sig'] = '';
+    const p = pads[role];
+    const rect = p.canvas.getBoundingClientRect();
+    p.ctx.clearRect(0,0,rect.width,rect.height);
+    document.getElementById(role+'Placeholder').style.display='block';
+    scheduleSave();
+  });
+});
+
+/* =========================================================
+   7. NAME / NOTE INPUTS
+========================================================= */
+document.getElementById('checkerName').addEventListener('input', e=>{ data.checkerName = e.target.value; scheduleSave(); });
+document.getElementById('reviewerName').addEventListener('input', e=>{ data.reviewerName = e.target.value; scheduleSave(); });
+document.getElementById('specialNote').addEventListener('input', e=>{ data.specialNote = e.target.value; scheduleSave(); });
+
+/* =========================================================
+   8. RESET ACTIONS
+========================================================= */
+document.getElementById('btnResetYN').addEventListener('click', ()=>{
+  Object.keys(data.items).forEach(id=> data.items[id].result = 'Y');
+  renderTable();
+  scheduleSave();
+  showToast('모든 항목이 Y로 초기화되었습니다.');
+});
+document.getElementById('btnClearAll').addEventListener('click', ()=>{
+  if(!confirm('오늘 작성된 모든 내용을 초기화할까요?')) return;
+  data = defaultData();
+  renderAll();
+  pushCloud();
+  showToast('초기화되었습니다.');
+});
+
+/* =========================================================
+   9. TABS
+========================================================= */
+document.getElementById('tabChecklistBtn').addEventListener('click', ()=>{
+  document.getElementById('viewChecklist').style.display='block';
+  document.getElementById('viewSettings').style.display='none';
+  document.getElementById('tabChecklistBtn').classList.add('active');
+  document.getElementById('tabSettingsBtn').classList.remove('active');
+});
+document.getElementById('tabSettingsBtn').addEventListener('click', ()=>{
+  document.getElementById('viewChecklist').style.display='none';
+  document.getElementById('viewSettings').style.display='block';
+  document.getElementById('tabSettingsBtn').classList.add('active');
+  document.getElementById('tabChecklistBtn').classList.remove('active');
+  fillSettingsForm();
+});
+
+function fillSettingsForm(){
+  document.getElementById('setFrom').value = settings.from || '';
+  document.getElementById('setTo').value = settings.to || '';
+  document.getElementById('setSubject').value = settings.subject || '';
+  document.getElementById('setEmailjsService').value = settings.emailjsService || '';
+  document.getElementById('setEmailjsTemplate').value = settings.emailjsTemplate || '';
+  document.getElementById('setEmailjsKey').value = settings.emailjsKey || '';
+  document.getElementById('setFirebaseConfig').value = settings.firebaseConfig || '';
+}
+
+document.getElementById('btnSaveSettings').addEventListener('click', ()=>{
+  settings.from = document.getElementById('setFrom').value.trim();
+  settings.to = document.getElementById('setTo').value.trim();
+  settings.subject = document.getElementById('setSubject').value.trim();
+  settings.emailjsService = document.getElementById('setEmailjsService').value.trim();
+  settings.emailjsTemplate = document.getElementById('setEmailjsTemplate').value.trim();
+  settings.emailjsKey = document.getElementById('setEmailjsKey').value.trim();
+  settings.firebaseConfig = document.getElementById('setFirebaseConfig').value.trim();
+  saveSettingsToStorage();
+  if(settings.emailjsKey){ try{ emailjs.init({publicKey: settings.emailjsKey}); }catch(e){} }
+  initFirebase();
+  showToast('설정이 저장되었습니다.');
+});
+
+/* =========================================================
+   10. PDF GENERATION
+========================================================= */
+async function generatePdfBlob(){
+  const el = document.getElementById('printArea');
+  const canvas = await html2canvas(el, { scale:2, backgroundColor:'#ffffff' });
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p','mm','a4');
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const imgW = pageW - 16;
+  const imgH = canvas.height * imgW / canvas.width;
+  let heightLeft = imgH;
+  let position = 8;
+  pdf.addImage(imgData, 'PNG', 8, position, imgW, imgH);
+  heightLeft -= (pageH - 16);
+  while(heightLeft > 0){
+    position = heightLeft - imgH + 8;
+    pdf.addPage();
+    pdf.addImage(imgData, 'PNG', 8, position, imgW, imgH);
+    heightLeft -= pageH;
+  }
+  return pdf.output('blob');
+}
+function blobToBase64(blob){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=> res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+document.getElementById('btnPdf').addEventListener('click', async ()=>{
+  showToast('PDF 생성 중...');
+  const blob = await generatePdfBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Kardian_Checklist_${data.date}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('PDF가 저장되었습니다.');
+});
+
+/* =========================================================
+   11. EMAIL SENDING
+========================================================= */
+document.getElementById('btnSendMail').addEventListener('click', ()=> sendMail(false));
+document.getElementById('btnTestMail').addEventListener('click', ()=> sendMail(true));
+
+async function sendMail(isTest){
+  if(!settings.emailjsService || !settings.emailjsTemplate || !settings.emailjsKey){
+    if(!confirm('EmailJS 설정이 완료되지 않았습니다. PDF를 다운로드한 후, 메일 앱으로 직접 보내시겠습니까?')) return;
+    document.getElementById('tabChecklistBtn').click();
+    const blob = await generatePdfBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `Kardian_Checklist_${data.date}.pdf`; a.click();
+    URL.revokeObjectURL(url);
+    const mailto = `mailto:${encodeURIComponent(settings.to)}?subject=${encodeURIComponent(settings.subject+' '+data.date)}&body=${encodeURIComponent('첨부된 PDF를 확인해 주세요. (다운로드된 PDF 파일을 직접 첨부해주세요)')}`;
+    window.location.href = mailto;
+    return;
+  }
+  try{
+    showToast('메일 발송 준비 중...');
+    const blob = await generatePdfBlob();
+    const base64 = await blobToBase64(blob);
+    emailjs.init({ publicKey: settings.emailjsKey });
+    const params = {
+      from_email: settings.from,
+      to_email: settings.to,
+      subject: (isTest?'[TEST] ':'') + settings.subject + ' ' + data.date,
+      message: `Kardian Daily NAV Checklist (${data.date}) 자동 발송 메일입니다.`,
+      pdf_attachment: base64,
+      pdf_filename: `Kardian_Checklist_${data.date}.pdf`
+    };
+    await emailjs.send(settings.emailjsService, settings.emailjsTemplate, params);
+    showToast('메일이 발송되었습니다.');
+  }catch(err){
+    console.error(err);
+    showToast('메일 발송 실패 — 콘솔을 확인하세요.');
+  }
+}
+
+/* =========================================================
+   12. TOAST
+========================================================= */
+let toastTimer=null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+}
+
+/* =========================================================
+   13. INIT
+========================================================= */
+function init(){
+  data = loadLocalData();
+  renderAll();
+  setupSigPad('checker');
+  setupSigPad('reviewer');
+  if(settings.emailjsKey){ try{ emailjs.init({publicKey: settings.emailjsKey}); }catch(e){} }
+  initFirebase();
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+}
+init();
+</script>
+</body>
+</html>
