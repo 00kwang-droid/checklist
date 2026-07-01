@@ -12,11 +12,10 @@
 <!-- PDF & capture -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- Email sending -->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <!-- Firebase (optional team sync) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
 
 <style>
   :root{
@@ -70,6 +69,24 @@
 
   /* ---------- Sync badge ---------- */
   .status-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;}
+
+  .day-selector{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;}
+  .day-pill{
+    position:relative; border:1px solid var(--line); background:#fff; color:var(--text-dim);
+    font-size:11.5px; font-weight:700; padding:6px 12px 6px 20px; border-radius:999px;
+  }
+  .day-pill .pdot{
+    position:absolute; left:9px; top:50%; transform:translateY(-50%);
+    width:6px; height:6px; border-radius:50%; background:#C9CDDA;
+  }
+  .day-pill.is-active .pdot{background:var(--good);}
+  .day-pill.is-selected{background:var(--navy); color:#fff; border-color:var(--navy);}
+  .day-pill.is-selected .pdot{background:#7FE0B0;}
+
+  .lock-banner{
+    display:flex; align-items:center; gap:8px; background:#FFF6E8; border:1px solid #F0DBAE; color:#8A6417;
+    font-size:12px; font-weight:600; padding:9px 12px; border-radius:10px; margin-bottom:12px;
+  }
   .badge{
     display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
     padding:5px 10px; border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--text-dim);
@@ -238,7 +255,12 @@
     <div id="viewChecklist">
       <div class="status-row">
         <span class="badge"><span id="syncDot" class="dot off"></span><span id="syncText">로컬 저장 모드 (팀 공유 미설정)</span></span>
-        <span class="badge">불러온 날짜: <strong id="badgeDate" style="margin-left:4px;"></strong></span>
+        <span class="badge">보관: 작성중 + 과거 3영업일</span>
+      </div>
+
+      <div class="day-selector" id="daySelector"></div>
+      <div class="lock-banner" id="lockBanner" style="display:none;">
+        🔒 <span>마감된 리포트입니다 (조회 전용). 익일 오전 7시 전까지만 수정할 수 있어요. PDF 저장/메일 발송은 계속 가능합니다.</span>
       </div>
 
       <div class="sheet" id="printArea">
@@ -292,10 +314,12 @@
       </div>
 
       <div class="actions">
-        <button class="btn btn-primary" id="btnSendMail">✉ 메일 발송 (PDF 첨부)</button>
+        <button class="btn btn-primary" id="btnSendMail">✉ 메일 발송</button>
         <button class="btn btn-accent" id="btnPdf">⬇ PDF 저장</button>
-        <button class="btn btn-ghost" id="btnResetYN">Y로 초기화</button>
-        <button class="btn btn-ghost" id="btnClearAll">전체 초기화</button>
+        <span id="editOnlyActions" style="display:contents;">
+          <button class="btn btn-ghost" id="btnResetYN">Y로 초기화</button>
+          <button class="btn btn-ghost" id="btnClearAll">전체 초기화</button>
+        </span>
       </div>
     </div>
 
@@ -303,24 +327,14 @@
     <div id="viewSettings" style="display:none;">
       <div class="settings-card">
         <h2>이메일 설정</h2>
-        <div class="desc">체크리스트를 발송할 때 사용할 보내는 사람 / 받는 사람 주소를 관리합니다. 콤마(,)로 구분해 여러 명을 받는 사람으로 지정할 수 있습니다.</div>
+        <div class="desc">"메일 발송" 버튼을 누르면 PDF가 자동으로 다운로드되고, 이 정보로 채워진 Gmail 작성 화면이 열립니다. 실제 보내는 사람 주소는 휴대폰 Gmail 앱에 로그인된 계정이 사용되므로, kskim01@shinhan.com으로 보내려면 Gmail 앱 자체에서 그 계정으로 로그인해 두세요.</div>
 
         <div class="field-group">
           <h3>주소</h3>
-          <div class="field"><label>보내는 사람 이메일</label><input type="text" id="setFrom" placeholder="kskim01@shinhan.com"></div>
+          <div class="field"><label>보내는 사람 이메일 (참고용 표시)</label><input type="text" id="setFrom" placeholder="kskim01@shinhan.com"></div>
           <div class="field"><label>받는 사람 이메일</label><input type="text" id="setTo" placeholder="00kwang@gmail.com"></div>
           <div class="field"><label>메일 제목</label><input type="text" id="setSubject" placeholder="[Kardian] Daily NAV Checklist"></div>
-        </div>
-
-        <div class="field-group">
-          <h3>EmailJS 발송 설정 <span class="hint" style="margin:0;">(자동 발송에 필요)</span></h3>
-          <div class="field"><label>Service ID</label><input type="text" id="setEmailjsService" placeholder="service_xxxxxxx"></div>
-          <div class="field"><label>Template ID</label><input type="text" id="setEmailjsTemplate" placeholder="template_xxxxxxx"></div>
-          <div class="field"><label>Public Key</label><input type="text" id="setEmailjsKey" placeholder="public key"></div>
-          <div class="hint">
-            emailjs.com에서 무료 계정을 만들고 서비스(SMTP/Gmail 등)와 템플릿을 연결하세요. 템플릿에 <code>{{to_email}}</code>, <code>{{from_email}}</code>, <code>{{subject}}</code>, <code>{{message}}</code> 변수를 넣고,
-            템플릿의 첨부파일(Attachments) 항목을 동적 변수 <code>{{pdf_attachment}}</code>로 연결하면 PDF가 자동 첨부됩니다. 설정하지 않으면 PDF를 다운로드한 뒤 메일 앱에서 수동으로 첨부하는 방식으로 대체됩니다.
-          </div>
+          <div class="hint">받는 사람은 콤마(,)로 구분해 여러 명을 지정할 수 있습니다.</div>
         </div>
 
         <div class="field-group">
@@ -331,13 +345,12 @@
           </div>
           <div class="hint">
             firebase.google.com(무료 Spark 플랜)에서 프로젝트를 만들고 Firestore Database를 사용 설정한 뒤, 프로젝트 설정 &gt; 일반 &gt; SDK 설정값의 config 객체를 그대로 붙여넣으세요.
-            같은 설정값을 팀원 모두가 입력하면 같은 날짜의 체크리스트를 실시간으로 함께 작성/공유할 수 있습니다. 비워두면 이 기기에만 저장됩니다.
+            같은 설정값을 팀원 모두가 입력하면 오늘 작성중인 체크리스트를 실시간으로 함께 작성/공유할 수 있습니다. 비워두면 이 기기에만 저장됩니다.
           </div>
         </div>
 
         <div class="save-row">
           <button class="btn btn-primary" id="btnSaveSettings">설정 저장</button>
-          <button class="btn btn-ghost" id="btnTestMail">테스트 메일 발송</button>
         </div>
       </div>
     </div>
@@ -384,19 +397,44 @@ const CHECKLIST = [
 const DEFAULT_NOTE = '금일 특이사항 없습니다.';
 
 /* =========================================================
-   2. STATE / STORAGE
+   2. STATE / STORAGE — business-day cutoff & retention
 ========================================================= */
-function todayStr(){
-  const d = new Date();
-  const p = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+const CUTOFF_HOUR = 7; // report locks at 07:00 on the next business day
+
+function isBizDay(d){ const w = d.getDay(); return w>=1 && w<=5; } // Mon–Fri (public holidays not accounted for)
+function addDays(d,n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+function toKey(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function prevBizDayBefore(d){ let c = addDays(d,-1); while(!isBizDay(c)) c = addDays(c,-1); return c; }
+function nextBizDay(d){ let c = addDays(d,1); while(!isBizDay(c)) c = addDays(c,1); return c; }
+
+// Which business-day's report is currently open for editing, given "now".
+// A report for business day D stays editable until 07:00 on the next business day after D.
+function computeActiveDate(now = new Date()){
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dPrev = prevBizDayBefore(todayMid);
+  const cutoff = nextBizDay(dPrev);
+  cutoff.setHours(CUTOFF_HOUR,0,0,0);
+  return (now < cutoff) ? dPrev : nextBizDay(dPrev);
 }
-const TODAY = todayStr();
+// Active day + the 3 business days before it = data we keep.
+function computeRetainedDates(activeDate){
+  const list = [activeDate];
+  let cur = activeDate;
+  for(let i=0;i<3;i++){ cur = prevBizDayBefore(cur); list.push(cur); }
+  return list; // most recent first
+}
+
 const LS_SETTINGS = 'kardian_settings_v1';
-const LS_DATA_PREFIX = 'kardian_data_'; // + date
+const LS_DATA_PREFIX = 'kardian_data_'; // + date key
 
 let settings = loadSettings();
-let data = null; // current day's data
+let ACTIVE_DATE = computeActiveDate();
+let ACTIVE_KEY = toKey(ACTIVE_DATE);
+let RETAINED_DATES = computeRetainedDates(ACTIVE_DATE);
+let RETAINED_KEYS = RETAINED_DATES.map(toKey);
+
+let viewKey = ACTIVE_KEY;      // which day's report is currently displayed
+let data = null;               // that day's data
 let fsUnsub = null;
 let db = null;
 let saveTimer = null;
@@ -410,7 +448,6 @@ function loadSettings(){
     from: 'kskim01@shinhan.com',
     to: '00kwang@gmail.com',
     subject: '[Kardian] Daily NAV Checklist',
-    emailjsService:'', emailjsTemplate:'', emailjsKey:'',
     firebaseConfig:''
   };
 }
@@ -418,13 +455,13 @@ function saveSettingsToStorage(){
   localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
 }
 
-function defaultData(){
+function defaultData(key){
   const items = {};
   CHECKLIST.filter(x=>x.type==='item').forEach(it=>{
     items[it.id] = { count:'', result:'Y' };
   });
   return {
-    date: TODAY,
+    date: key,
     items,
     specialNote: DEFAULT_NOTE,
     checkerName:'', checkerSig:'',
@@ -433,22 +470,32 @@ function defaultData(){
   };
 }
 
-function loadLocalData(){
+function loadLocalData(key){
   try{
-    const raw = localStorage.getItem(LS_DATA_PREFIX+TODAY);
+    const raw = localStorage.getItem(LS_DATA_PREFIX+key);
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return defaultData();
+  return defaultData(key);
 }
 function saveLocalData(){
-  localStorage.setItem(LS_DATA_PREFIX+TODAY, JSON.stringify(data));
+  localStorage.setItem(LS_DATA_PREFIX+viewKey, JSON.stringify(data));
+}
+// Drop any saved day outside the retention window (active + past 3 business days).
+function cleanupOldLocalData(){
+  const keep = new Set(RETAINED_KEYS);
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(LS_DATA_PREFIX))
+    .forEach(k => { if(!keep.has(k.slice(LS_DATA_PREFIX.length))) localStorage.removeItem(k); });
 }
 
 /* =========================================================
    3. FIREBASE (optional team sync)
+   Only the active (editable) day syncs in real time.
+   Archived days are fetched once, read-only.
 ========================================================= */
 function initFirebase(){
   if(!settings.firebaseConfig || !settings.firebaseConfig.trim()){
+    db = null;
     setSyncBadge(false, '로컬 저장 모드 (팀 공유 미설정)');
     return;
   }
@@ -457,9 +504,10 @@ function initFirebase(){
     if(!firebase.apps.length) firebase.initializeApp(cfg);
     db = firebase.firestore();
     setSyncBadge(true, '팀 공유 연결됨 (Firestore)');
-    subscribeCloud();
+    if(viewKey === ACTIVE_KEY) subscribeCloudActive(); else fetchCloudOnce(viewKey);
   }catch(e){
     console.error('Firebase init failed', e);
+    db = null;
     setSyncBadge(false, 'Firebase 설정 오류 — 로컬 저장 모드');
   }
 }
@@ -467,45 +515,120 @@ function setSyncBadge(on, text){
   document.getElementById('syncDot').className = 'dot ' + (on?'on':'off');
   document.getElementById('syncText').textContent = text;
 }
-function subscribeCloud(){
+function subscribeCloudActive(){
   if(!db) return;
-  if(fsUnsub) fsUnsub();
-  fsUnsub = db.collection('checklists').doc(TODAY).onSnapshot(doc=>{
+  if(fsUnsub){ fsUnsub(); fsUnsub = null; }
+  fsUnsub = db.collection('checklists').doc(ACTIVE_KEY).onSnapshot(doc=>{
+    if(viewKey !== ACTIVE_KEY) return; // user has since navigated to an archived day
     if(doc.exists){
       const remote = doc.data();
-      // avoid clobbering local edits with a stale echo of what we just wrote
       if(!data || remote.updatedAt > (data.updatedAt||0)){
         data = remote;
         saveLocalData();
         renderAll();
       }
     } else {
-      // first writer seeds the cloud doc
-      db.collection('checklists').doc(TODAY).set(data);
+      db.collection('checklists').doc(ACTIVE_KEY).set(data);
     }
   }, err=>{
     console.error(err);
     setSyncBadge(false, '동기화 오류 — 로컬 저장 모드');
   });
 }
+function fetchCloudOnce(key){
+  if(!db) return;
+  db.collection('checklists').doc(key).get().then(doc=>{
+    if(viewKey !== key) return;
+    if(doc.exists){
+      const remote = doc.data();
+      if(!data || remote.updatedAt > (data.updatedAt||0)){
+        data = remote;
+        saveLocalData();
+        renderAll();
+      }
+    }
+  }).catch(e=>console.error(e));
+}
 function pushCloud(){
+  if(viewKey !== ACTIVE_KEY) return; // never write to a locked/archived day
   data.updatedAt = Date.now();
   saveLocalData();
   if(db){
-    db.collection('checklists').doc(TODAY).set(data).catch(e=>console.error(e));
+    db.collection('checklists').doc(ACTIVE_KEY).set(data).catch(e=>console.error(e));
   }
 }
 function scheduleSave(){
+  if(viewKey !== ACTIVE_KEY) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(pushCloud, 350);
 }
+
+/* =========================================================
+   3b. DAY SELECTOR / VIEW SWITCHING / LOCK STATE
+========================================================= */
+function switchView(key){
+  if(fsUnsub){ fsUnsub(); fsUnsub = null; }
+  viewKey = key;
+  data = loadLocalData(key);
+  renderAll();
+  setupSigPad('checker');
+  setupSigPad('reviewer');
+  applyLockState();
+  renderDaySelector();
+  if(db){
+    if(key === ACTIVE_KEY) subscribeCloudActive(); else fetchCloudOnce(key);
+  }
+}
+function applyLockState(){
+  const locked = viewKey !== ACTIVE_KEY;
+  document.getElementById('lockBanner').style.display = locked ? 'flex' : 'none';
+  document.getElementById('editOnlyActions').style.display = locked ? 'none' : 'contents';
+
+  document.querySelectorAll('.count-input').forEach(el => el.disabled = locked);
+  document.querySelectorAll('.yn-group button').forEach(el => el.disabled = locked);
+  document.getElementById('specialNote').readOnly = locked;
+  document.getElementById('checkerName').readOnly = locked;
+  document.getElementById('reviewerName').readOnly = locked;
+  document.querySelectorAll('.sigpad').forEach(el => el.style.pointerEvents = locked ? 'none' : 'auto');
+  document.querySelectorAll('.sig-clear').forEach(el => el.style.display = locked ? 'none' : 'inline-block');
+}
+function renderDaySelector(){
+  const el = document.getElementById('daySelector');
+  const p = n => String(n).padStart(2,'0');
+  el.innerHTML = '';
+  RETAINED_DATES.forEach(d=>{
+    const key = toKey(d);
+    const btn = document.createElement('button');
+    btn.className = 'day-pill' + (key===ACTIVE_KEY?' is-active':'') + (key===viewKey?' is-selected':'');
+    btn.innerHTML = `<span class="pdot"></span>${p(d.getMonth()+1)}/${p(d.getDate())} · ${key===ACTIVE_KEY?'작성중':'마감'}`;
+    btn.addEventListener('click', ()=> switchView(key));
+    el.appendChild(btn);
+  });
+}
+// Re-check every minute in case the app is left open across the 07:00 cutoff.
+setInterval(()=>{
+  const newActiveDate = computeActiveDate();
+  const newActiveKey = toKey(newActiveDate);
+  if(newActiveKey === ACTIVE_KEY) return;
+  const wasViewingActive = (viewKey === ACTIVE_KEY);
+  ACTIVE_DATE = newActiveDate;
+  ACTIVE_KEY = newActiveKey;
+  RETAINED_DATES = computeRetainedDates(ACTIVE_DATE);
+  RETAINED_KEYS = RETAINED_DATES.map(toKey);
+  cleanupOldLocalData();
+  if(wasViewingActive){
+    switchView(ACTIVE_KEY);
+    showToast('영업일이 바뀌어 새 리포트로 초기화되었습니다.');
+  } else {
+    renderDaySelector();
+  }
+}, 60000);
 
 /* =========================================================
    4. RENDER
 ========================================================= */
 function renderAll(){
   document.getElementById('dateLabel').textContent = 'Date : ' + data.date;
-  document.getElementById('badgeDate').textContent = data.date;
   renderTable();
   document.getElementById('specialNote').value = data.specialNote ?? DEFAULT_NOTE;
   document.getElementById('checkerName').value = data.checkerName || '';
@@ -674,15 +797,19 @@ document.getElementById('specialNote').addEventListener('input', e=>{ data.speci
    8. RESET ACTIONS
 ========================================================= */
 document.getElementById('btnResetYN').addEventListener('click', ()=>{
+  if(viewKey !== ACTIVE_KEY) return;
   Object.keys(data.items).forEach(id=> data.items[id].result = 'Y');
   renderTable();
+  applyLockState();
   scheduleSave();
   showToast('모든 항목이 Y로 초기화되었습니다.');
 });
 document.getElementById('btnClearAll').addEventListener('click', ()=>{
+  if(viewKey !== ACTIVE_KEY) return;
   if(!confirm('오늘 작성된 모든 내용을 초기화할까요?')) return;
-  data = defaultData();
+  data = defaultData(ACTIVE_KEY);
   renderAll();
+  applyLockState();
   pushCloud();
   showToast('초기화되었습니다.');
 });
@@ -708,9 +835,6 @@ function fillSettingsForm(){
   document.getElementById('setFrom').value = settings.from || '';
   document.getElementById('setTo').value = settings.to || '';
   document.getElementById('setSubject').value = settings.subject || '';
-  document.getElementById('setEmailjsService').value = settings.emailjsService || '';
-  document.getElementById('setEmailjsTemplate').value = settings.emailjsTemplate || '';
-  document.getElementById('setEmailjsKey').value = settings.emailjsKey || '';
   document.getElementById('setFirebaseConfig').value = settings.firebaseConfig || '';
 }
 
@@ -718,12 +842,8 @@ document.getElementById('btnSaveSettings').addEventListener('click', ()=>{
   settings.from = document.getElementById('setFrom').value.trim();
   settings.to = document.getElementById('setTo').value.trim();
   settings.subject = document.getElementById('setSubject').value.trim();
-  settings.emailjsService = document.getElementById('setEmailjsService').value.trim();
-  settings.emailjsTemplate = document.getElementById('setEmailjsTemplate').value.trim();
-  settings.emailjsKey = document.getElementById('setEmailjsKey').value.trim();
   settings.firebaseConfig = document.getElementById('setFirebaseConfig').value.trim();
   saveSettingsToStorage();
-  if(settings.emailjsKey){ try{ emailjs.init({publicKey: settings.emailjsKey}); }catch(e){} }
   initFirebase();
   showToast('설정이 저장되었습니다.');
 });
@@ -845,63 +965,56 @@ async function generatePdfBlob(){
   pdf.addImage(imgData, 'PNG', x, y, imgW, imgH);
   return pdf.output('blob');
 }
-function blobToBase64(blob){
-  return new Promise((res,rej)=>{
-    const r = new FileReader();
-    r.onload = ()=> res(r.result.split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(blob);
-  });
-}
 
 document.getElementById('btnPdf').addEventListener('click', async ()=>{
   showToast('PDF 생성 중...');
+  await downloadPdf();
+  showToast('PDF가 다운로드 폴더에 저장되었습니다.');
+});
+
+// Saves via a plain <a download> click, which browsers place in the
+// device's default Downloads location — the same place Gmail's
+// attachment picker (첨부파일 → 파일/다운로드) opens to by default.
+async function downloadPdf(){
   const blob = await generatePdfBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = `Kardian_Checklist_${data.date}.pdf`;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   URL.revokeObjectURL(url);
-  showToast('PDF가 저장되었습니다.');
-});
+}
 
 /* =========================================================
    11. EMAIL SENDING
+   No mail-relay service involved: the PDF is downloaded to the
+   device's Downloads folder, then Gmail's compose screen opens
+   pre-filled with recipient/subject/body. The actual "from"
+   address is whichever Google account is signed into the Gmail
+   app — attach the just-downloaded PDF there and send.
 ========================================================= */
-document.getElementById('btnSendMail').addEventListener('click', ()=> sendMail(false));
-document.getElementById('btnTestMail').addEventListener('click', ()=> sendMail(true));
+document.getElementById('btnSendMail').addEventListener('click', sendMail);
 
-async function sendMail(isTest){
-  if(!settings.emailjsService || !settings.emailjsTemplate || !settings.emailjsKey){
-    if(!confirm('EmailJS 설정이 완료되지 않았습니다. PDF를 다운로드한 후, 메일 앱으로 직접 보내시겠습니까?')) return;
-    document.getElementById('tabChecklistBtn').click();
-    const blob = await generatePdfBlob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `Kardian_Checklist_${data.date}.pdf`; a.click();
-    URL.revokeObjectURL(url);
-    const mailto = `mailto:${encodeURIComponent(settings.to)}?subject=${encodeURIComponent(settings.subject+' '+data.date)}&body=${encodeURIComponent('첨부된 PDF를 확인해 주세요. (다운로드된 PDF 파일을 직접 첨부해주세요)')}`;
-    window.location.href = mailto;
-    return;
-  }
-  try{
-    showToast('메일 발송 준비 중...');
-    const blob = await generatePdfBlob();
-    const base64 = await blobToBase64(blob);
-    emailjs.init({ publicKey: settings.emailjsKey });
-    const params = {
-      from_email: settings.from,
-      to_email: settings.to,
-      subject: (isTest?'[TEST] ':'') + settings.subject + ' ' + data.date,
-      message: `Kardian Daily NAV Checklist (${data.date}) 자동 발송 메일입니다.`,
-      pdf_attachment: base64,
-      pdf_filename: `Kardian_Checklist_${data.date}.pdf`
-    };
-    await emailjs.send(settings.emailjsService, settings.emailjsTemplate, params);
-    showToast('메일이 발송되었습니다.');
-  }catch(err){
-    console.error(err);
-    showToast('메일 발송 실패 — 콘솔을 확인하세요.');
-  }
+async function sendMail(){
+  showToast('PDF 다운로드 중...');
+  const filename = `Kardian_Checklist_${data.date}.pdf`;
+  await downloadPdf();
+
+  const bodyLines = [
+    `Kardian Daily NAV Checklist (${data.date})`,
+    '',
+    `다운로드된 첨부파일(${filename})을 아래 "파일 첨부"에서 선택해 첨부해 주세요.`,
+    settings.from ? `보낸이 참고: ${settings.from}` : ''
+  ].filter(Boolean).join('\n');
+
+  const mailto = `mailto:${encodeURIComponent(settings.to||'')}`
+    + `?subject=${encodeURIComponent((settings.subject||'') + ' ' + data.date)}`
+    + `&body=${encodeURIComponent(bodyLines)}`;
+
+  // Small delay so the download has a moment to start before navigating away.
+  setTimeout(()=>{ window.location.href = mailto; }, 400);
+  showToast('PDF 저장 완료 — Gmail을 여는 중...');
 }
 
 /* =========================================================
@@ -920,11 +1033,13 @@ function showToast(msg){
    13. INIT
 ========================================================= */
 function init(){
-  data = loadLocalData();
+  cleanupOldLocalData();
+  data = loadLocalData(viewKey);
   renderAll();
   setupSigPad('checker');
   setupSigPad('reviewer');
-  if(settings.emailjsKey){ try{ emailjs.init({publicKey: settings.emailjsKey}); }catch(e){} }
+  applyLockState();
+  renderDaySelector();
   initFirebase();
 
   if('serviceWorker' in navigator){
