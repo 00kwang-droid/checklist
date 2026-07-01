@@ -934,15 +934,12 @@ async function generatePdfBlob(){
   const el = buildPrintTemplate();
   let canvas;
   try{
-    canvas = await html2canvas(el, { scale:2, backgroundColor:'#ffffff' });
+    canvas = await html2canvas(el, { scale:1.5, backgroundColor:'#ffffff' });
   } finally {
     el.remove();
   }
-  const imgData = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('p','mm','a4');
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
+  const pageW = 210, pageH = 297; // A4 mm
   const margin = 8;
   const maxW = pageW - margin*2;
   const maxH = pageH - margin*2;
@@ -956,8 +953,21 @@ async function generatePdfBlob(){
   }
   const x = margin + (maxW - imgW) / 2;
   const y = margin;
-  pdf.addImage(imgData, 'PNG', x, y, imgW, imgH);
-  return pdf.output('blob');
+
+  // JPEG compresses far better than PNG for this kind of content.
+  // Step the quality down until the file lands under 100KB.
+  const TARGET_BYTES = 100 * 1024;
+  let quality = 0.85;
+  let blob;
+  for(let i=0; i<7; i++){
+    const jpegData = canvas.toDataURL('image/jpeg', quality);
+    const pdf = new jsPDF('p','mm','a4');
+    pdf.addImage(jpegData, 'JPEG', x, y, imgW, imgH);
+    blob = pdf.output('blob');
+    if(blob.size <= TARGET_BYTES || quality <= 0.3) break;
+    quality -= 0.12;
+  }
+  return blob;
 }
 
 document.getElementById('btnPdf').addEventListener('click', async ()=>{
