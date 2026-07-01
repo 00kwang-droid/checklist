@@ -47,7 +47,7 @@
     position:sticky; top:0; z-index:40;
     background:var(--navy); color:#fff;
     padding:14px 18px;
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
     box-shadow:0 2px 10px rgba(16,26,48,.25);
   }
   .brand{display:flex; align-items:baseline; gap:10px;}
@@ -87,6 +87,47 @@
     display:flex; align-items:center; gap:8px; background:#FFF6E8; border:1px solid #F0DBAE; color:#8A6417;
     font-size:12px; font-weight:600; padding:9px 12px; border-radius:10px; margin-bottom:12px;
   }
+
+  /* ---------- Login gate ---------- */
+  .login-gate{
+    position:fixed; inset:0; z-index:200; background:linear-gradient(160deg,var(--navy),var(--navy-deep));
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .login-card{
+    background:#fff; border-radius:16px; padding:30px 26px; width:100%; max-width:320px;
+    text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  .login-mark{
+    width:44px; height:44px; border-radius:12px; background:var(--accent); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
+    margin:0 auto 14px;
+  }
+  .login-card h2{font-size:16px; color:var(--navy); margin:0 0 4px;}
+  .login-card p{font-size:12.5px; color:var(--text-dim); margin:0 0 18px;}
+  .login-card input{
+    width:100%; text-align:center; letter-spacing:2px; font-weight:700; font-size:16px;
+    padding:12px; border:1px solid var(--line); border-radius:10px; margin-bottom:10px;
+    text-transform:uppercase;
+  }
+  .login-card input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .login-card button{
+    width:100%; border:none; background:var(--navy); color:#fff; font-weight:700; font-size:13.5px;
+    padding:12px; border-radius:10px;
+  }
+  .login-card button:hover{background:var(--navy-deep);}
+  .login-error{color:var(--bad); font-size:12px; font-weight:600; margin-top:10px;}
+
+  .user-chip{
+    display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.08); color:#fff;
+    font-size:12px; font-weight:600; padding:6px 10px; border-radius:999px; margin-right:8px;
+  }
+  .user-chip button{
+    border:none; background:rgba(255,255,255,.18); color:#fff; font-size:10.5px; font-weight:700;
+    padding:3px 8px; border-radius:999px;
+  }
+  .user-chip button:hover{background:rgba(255,255,255,.3);}
+
+  .col-editor{width:96px; font-size:11px; color:var(--text-dim);}
   .badge{
     display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
     padding:5px 10px; border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--text-dim);
@@ -225,6 +266,7 @@
     table.chk{font-size:12px;}
     .col-count{width:96px;}
     .col-result{width:120px;}
+    .col-editor{width:64px; font-size:10px;}
   }
 
   @media print{
@@ -235,6 +277,17 @@
 </head>
 <body>
 
+  <div class="login-gate" id="loginGate">
+    <div class="login-card">
+      <div class="login-mark">K</div>
+      <h2>Kardian Daily Checklist</h2>
+      <p>사번 ID 5자리를 입력해 주세요</p>
+      <input id="loginIdInput" type="text" maxlength="5" placeholder="예: 71213" autocomplete="off">
+      <button id="loginBtn">확인</button>
+      <div class="login-error" id="loginError" style="display:none;">등록되지 않은 ID입니다. 다시 확인해 주세요.</div>
+    </div>
+  </div>
+
   <div class="topbar">
     <div class="brand">
       <span class="mark">K</span>
@@ -243,9 +296,15 @@
         <div class="sub">Shinhan Fund Partners</div>
       </div>
     </div>
-    <div class="tabs">
-      <button id="tabChecklistBtn" class="active">체크리스트</button>
-      <button id="tabSettingsBtn">설정</button>
+    <div style="display:flex; align-items:center;">
+      <span class="user-chip" id="userChip" style="display:none;">
+        <span id="userChipName"></span>
+        <button id="switchUserBtn">전환</button>
+      </span>
+      <div class="tabs">
+        <button id="tabChecklistBtn" class="active">체크리스트</button>
+        <button id="tabSettingsBtn">설정</button>
+      </div>
     </div>
   </div>
 
@@ -279,6 +338,7 @@
               <th class="col-desc">설명</th>
               <th class="col-count">No. of Count</th>
               <th class="col-result">Checking Result</th>
+              <th class="col-editor">최종수정자</th>
             </tr>
           </thead>
           <tbody id="checklistBody"></tbody>
@@ -456,7 +516,7 @@ function saveSettingsToStorage(){
 function defaultData(key){
   const items = {};
   CHECKLIST.filter(x=>x.type==='item').forEach(it=>{
-    items[it.id] = { count:'', result:'Y' };
+    items[it.id] = { count:'', result:'Y', lastEditor:'' };
   });
   return {
     date: key,
@@ -642,11 +702,11 @@ function renderTable(){
     if(row.type==='section'){
       const tr = document.createElement('tr');
       tr.className = 'section';
-      tr.innerHTML = `<td colspan="4">${escapeHtml(row.title)}</td>`;
+      tr.innerHTML = `<td colspan="5">${escapeHtml(row.title)}</td>`;
       body.appendChild(tr);
       return;
     }
-    const st = data.items[row.id] || {count:'', result:'Y'};
+    const st = data.items[row.id] || {count:'', result:'Y', lastEditor:''};
     const tr = document.createElement('tr');
     tr.className = 'item';
     tr.innerHTML = `
@@ -667,6 +727,7 @@ function renderTable(){
           <button class="sel-n ${st.result==='N'?'on':''}" data-val="N">N</button>
         </div>
       </td>
+      <td class="col-editor">${escapeHtml(st.lastEditor || '—')}</td>
     `;
     body.appendChild(tr);
   });
@@ -675,6 +736,7 @@ function renderTable(){
     inp.addEventListener('input', e=>{
       const id = e.target.dataset.id;
       data.items[id].count = e.target.value;
+      stampEditor(id);
       scheduleSave();
     });
   });
@@ -685,6 +747,7 @@ function renderTable(){
         data.items[id].result = btn.dataset.val;
         grp.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
         btn.classList.add('on');
+        stampEditor(id);
         scheduleSave();
       });
     });
@@ -692,6 +755,20 @@ function renderTable(){
   body.querySelectorAll('.info-btn').forEach(btn=>{
     btn.addEventListener('click', (e)=> showPopover(e.target, e.target.dataset.desc));
   });
+}
+
+// Records who last touched a given item's count/result. Only shown in-app —
+// intentionally left out of the PDF template.
+function stampEditor(itemId){
+  const user = getCurrentUser();
+  if(!user) return;
+  data.items[itemId].lastEditor = user.name;
+  const cell = body_lastEditorCell(itemId);
+  if(cell) cell.textContent = user.name;
+}
+function body_lastEditorCell(itemId){
+  const grp = document.querySelector(`.yn-group[data-id="${CSS.escape(itemId)}"]`);
+  return grp ? grp.closest('tr').querySelector('.col-editor') : null;
 }
 
 function escapeHtml(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -1047,7 +1124,71 @@ function init(){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
 }
-init();
+
+/* =========================================================
+   14. LOGIN — 사번 5자리 ID
+========================================================= */
+const USERS = {
+  '71213': '김광석',
+  'F1211': '남윤호',
+  'J0919': '최한민',
+  'Q0103': '박인석',
+  'Q0601': '장동현'
+};
+const LS_USER = 'kardian_user_v1';
+
+function getCurrentUser(){
+  try{
+    const raw = localStorage.getItem(LS_USER);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return null;
+}
+function setCurrentUser(id, name){
+  localStorage.setItem(LS_USER, JSON.stringify({id, name}));
+}
+function updateUserChip(user){
+  const chip = document.getElementById('userChip');
+  if(user){
+    chip.style.display = 'flex';
+    document.getElementById('userChipName').textContent = user.name;
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+document.getElementById('loginIdInput').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
+function attemptLogin(){
+  const raw = document.getElementById('loginIdInput').value.trim().toUpperCase();
+  const name = USERS[raw];
+  const err = document.getElementById('loginError');
+  if(!name){
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  setCurrentUser(raw, name);
+  document.getElementById('loginGate').style.display = 'none';
+  updateUserChip({id:raw, name});
+  init();
+}
+
+document.getElementById('switchUserBtn').addEventListener('click', ()=>{
+  localStorage.removeItem(LS_USER);
+  location.reload();
+});
+
+// Entry point: show the login gate until a recognized user is on file.
+const existingUser = getCurrentUser();
+if(existingUser){
+  document.getElementById('loginGate').style.display = 'none';
+  updateUserChip(existingUser);
+  init();
+} else {
+  updateUserChip(null);
+}
 </script>
+
 </body>
 </html>
