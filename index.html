@@ -248,16 +248,29 @@
   .save-row{display:flex; gap:8px; margin-top:6px;}
 
   .user-row{
-    display:flex; align-items:center; justify-content:space-between;
     padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; font-size:12.5px;
   }
+  .user-row-view{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .user-row .uid{font-family:var(--mono); font-weight:700; color:var(--navy); margin-right:10px;}
-  .user-row button{
-    border:none; background:#FCEBEA; color:var(--bad); font-size:11px; font-weight:700;
-    padding:5px 10px; border-radius:6px;
+  .user-row .user-email{display:block; font-size:11px; color:#9AA1B2; margin-top:2px;}
+  .user-row-actions{display:flex; gap:6px; flex-shrink:0;}
+  .user-row-actions button{
+    border:none; font-size:11px; font-weight:700; padding:5px 10px; border-radius:6px;
   }
-  .user-row button:hover{background:#F6D2CF;}
-  .user-row button:disabled{opacity:.4; cursor:not-allowed;}
+  .btnEditUser{background:#EEF1FA; color:var(--navy);}
+  .btnEditUser:hover{background:#E2E7F6;}
+  .btnRemoveUser{background:#FCEBEA; color:var(--bad);}
+  .btnRemoveUser:hover{background:#F6D2CF;}
+  .btnRemoveUser:disabled{opacity:.4; cursor:not-allowed;}
+  .user-row-edit{display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;}
+  .user-row-edit input{
+    flex:1; min-width:100px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;
+  }
+  .user-row-edit button{border:none; font-size:11px; font-weight:700; padding:6px 10px; border-radius:6px;}
+  .btnSaveEditUser{background:var(--navy); color:#fff;}
+  .btnSaveEditUser:hover{background:var(--navy-deep);}
+  .btnCancelEditUser{background:#EEF0F4; color:#5B6270;}
+  .btnCancelEditUser:hover{background:#E2E5EC;}
   .add-user-row{display:flex; gap:8px; align-items:flex-end; margin-top:10px; flex-wrap:wrap;}
   .add-user-row .field{flex:1; min-width:120px; margin-bottom:0;}
   .add-user-row button{
@@ -406,13 +419,18 @@
     <div id="viewSettings" style="display:none;">
       <div class="settings-card">
         <h2>이메일 설정</h2>
-        <div class="desc">"메일 발송" 버튼을 누르면 PDF가 자동으로 다운로드되고, 이 정보로 채워진 Gmail 작성 화면이 열립니다. 실제 보내는 사람 주소는 휴대폰 Gmail 앱에 로그인된 계정이 사용되므로, kskim01@shinhan.com으로 보내려면 Gmail 앱 자체에서 그 계정으로 로그인해 두세요.</div>
+        <div class="desc">"메일 발송" 버튼을 누르면 PDF가 자동으로 다운로드되고, 아래 4개 주소가 채워진 Gmail 작성 화면이 열립니다. 실제 보내는 사람 주소는 휴대폰 Gmail 앱에 로그인된 계정이 사용됩니다.</div>
 
         <div class="field-group">
-          <h3>주소</h3>
-          <div class="field"><label>보내는 사람 이메일 (참고용 표시)</label><input type="text" id="setFrom" placeholder="kskim01@shinhan.com"></div>
-          <div class="field"><label>받는 사람 이메일</label><input type="text" id="setTo" placeholder="00kwang@gmail.com"></div>
-          <div class="hint">받는 사람은 콤마(,)로 구분해 여러 명을 지정할 수 있습니다. 메일 제목/본문은 "[신한펀드파트너스] NAV and Valuation review_날짜" 형식으로 고정되어 있습니다.</div>
+          <h3>받는 사람 (고정)</h3>
+          <div class="hint">
+            받는 사람은 다음 4개 주소로 고정되어 있어 별도 설정이 필요 없습니다:
+            <br>· operation@kardian.co.kr
+            <br>· sa_eastspring@shinhan.com
+            <br>· 00kwang@gmail.com
+            <br>· 현재 로그인한 사용자 본인 이메일 (아래 "사용자 관리"에 등록된 이메일)
+            <br>본인 이메일이 등록되어 있지 않으면 3개 주소로만 발송되니, 사용자 관리에서 이메일을 등록해 주세요.
+          </div>
         </div>
 
         <div class="field-group">
@@ -428,8 +446,9 @@
 
         <div class="field-group">
           <h3>사용자 관리 <span class="hint" style="margin:0;">(로그인 가능한 사번 ID)</span></h3>
-          <div class="desc" style="margin-bottom:10px;">여기 등록된 사번 ID로만 앱에 로그인할 수 있습니다. 아래에서 사용자를 추가하거나 삭제할 수 있습니다. (최소 1명은 남아 있어야 합니다.)</div>
+          <div class="desc" style="margin-bottom:10px;">여기 등록된 사번 ID로만 앱에 로그인할 수 있습니다. 아래에서 사용자를 추가·수정·삭제할 수 있으며, 변경 사항은 접속 중인 모든 사용자에게 실시간으로 반영됩니다. (최소 1명은 남아 있어야 합니다.)</div>
           <div id="userListContainer"></div>
+          <div class="hint" style="margin:6px 0 12px;">이메일은 메일 발송 시 "받는 사람"에 본인 주소를 자동으로 추가하기 위해 사용됩니다.</div>
           <div class="add-user-row">
             <div class="field">
               <label>사번 ID (5자리)</label>
@@ -438,6 +457,10 @@
             <div class="field">
               <label>이름</label>
               <input type="text" id="newUserName" placeholder="이름 입력">
+            </div>
+            <div class="field">
+              <label>이메일</label>
+              <input type="text" id="newUserEmail" placeholder="name@shinhan.com">
             </div>
             <button id="btnAddUser">추가</button>
           </div>
@@ -539,8 +562,6 @@ function loadSettings(){
     if(raw) return JSON.parse(raw);
   }catch(e){}
   return {
-    from: 'kskim01@shinhan.com',
-    to: '00kwang@gmail.com',
     firebaseConfig:''
   };
 }
@@ -605,7 +626,10 @@ const DEFAULT_FIREBASE_CONFIG = {
   appId: "1:388356181332:web:d4a518e28ec8f4e37d8cc1"
 };
 
-function initFirebase(){
+// Sets up the Firebase connection itself (app + Firestore handle) and starts
+// syncing the shared user directory. Safe to call before login — it never
+// touches checklist day-data, only the meta/users doc.
+function connectFirebase(){
   let cfg = DEFAULT_FIREBASE_CONFIG;
   let usingOverride = false;
 
@@ -617,7 +641,7 @@ function initFirebase(){
       console.error('Firebase override config parse failed, falling back to built-in config', e);
       db = null;
       setSyncBadge(false, 'Firebase 설정(설정 탭) 오류 — 로컬 저장 모드');
-      return;
+      return false;
     }
   }
 
@@ -625,12 +649,22 @@ function initFirebase(){
     if(!firebase.apps.length) firebase.initializeApp(cfg);
     db = firebase.firestore();
     setSyncBadge(true, usingOverride ? '팀 공유 연결됨 (사용자 지정 Firebase)' : '팀 공유 연결됨 (Firestore)');
-    if(viewKey === ACTIVE_KEY) subscribeCloudActive(); else fetchCloudOnce(viewKey);
+    subscribeUsersCloud();
+    return true;
   }catch(e){
     console.error('Firebase init failed', e);
     db = null;
     setSyncBadge(false, 'Firebase 설정 오류 — 로컬 저장 모드');
+    return false;
   }
+}
+
+// Called after login (from init()): makes sure Firebase is connected, then
+// additionally subscribes to today's checklist doc, which depends on
+// viewKey/data already being set up.
+function initFirebase(){
+  if(!connectFirebase()) return;
+  if(viewKey === ACTIVE_KEY) subscribeCloudActive(); else fetchCloudOnce(viewKey);
 }
 function setSyncBadge(on, text){
   document.getElementById('syncDot').className = 'dot ' + (on?'on':'off');
@@ -823,7 +857,7 @@ function renderTable(){
 // Records who last touched a given item's count/result. Only shown in-app —
 // intentionally left out of the PDF template.
 function stampEditor(itemId){
-  const user = getCurrentUser();
+  const user = currentUser;
   if(!user) return;
   data.items[itemId].lastEditor = user.name;
   const cell = body_lastEditorCell(itemId);
@@ -971,8 +1005,6 @@ document.getElementById('tabSettingsBtn').addEventListener('click', ()=>{
 });
 
 function fillSettingsForm(){
-  document.getElementById('setFrom').value = settings.from || '';
-  document.getElementById('setTo').value = settings.to || '';
   document.getElementById('setFirebaseConfig').value = settings.firebaseConfig || '';
   renderUserList();
 }
@@ -984,8 +1016,6 @@ function fillSettingsForm(){
 // silently disappeared. Now every meaningful exit point (typing pause, field
 // blur, leaving the settings tab, the page being hidden/closed) also saves.
 function saveSettingsNow(showMsg){
-  settings.from = document.getElementById('setFrom').value.trim();
-  settings.to = document.getElementById('setTo').value.trim();
   settings.firebaseConfig = document.getElementById('setFirebaseConfig').value.trim();
   const ok = saveSettingsToStorage();
   if(!ok){
@@ -999,7 +1029,7 @@ function saveSettingsNow(showMsg){
 document.getElementById('btnSaveSettings').addEventListener('click', ()=> saveSettingsNow(true));
 
 let settingsAutoSaveTimer = null;
-['setFrom','setTo','setFirebaseConfig'].forEach(id=>{
+['setFirebaseConfig'].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener('input', ()=>{
     clearTimeout(settingsAutoSaveTimer);
@@ -1023,12 +1053,29 @@ window.addEventListener('beforeunload', ()=> saveSettingsNow(false));
 function renderUserList(){
   const container = document.getElementById('userListContainer');
   const ids = Object.keys(USERS);
-  container.innerHTML = ids.map(id => `
+  container.innerHTML = ids.map(id => {
+    const u = USERS[id];
+    return `
     <div class="user-row" data-id="${escapeAttr(id)}">
-      <div><span class="uid">${escapeHtml(id)}</span>${escapeHtml(USERS[id])}</div>
-      <button class="btnRemoveUser" data-id="${escapeAttr(id)}" ${ids.length<=1?'disabled':''}>삭제</button>
-    </div>
-  `).join('');
+      <div class="user-row-view">
+        <div>
+          <span class="uid">${escapeHtml(id)}</span>${escapeHtml(u.name)}
+          <span class="user-email">${u.email ? escapeHtml(u.email) : '이메일 미등록'}</span>
+        </div>
+        <div class="user-row-actions">
+          <button class="btnEditUser" data-id="${escapeAttr(id)}">수정</button>
+          <button class="btnRemoveUser" data-id="${escapeAttr(id)}" ${ids.length<=1?'disabled':''}>삭제</button>
+        </div>
+      </div>
+      <div class="user-row-edit" style="display:none;">
+        <input type="text" class="editName" placeholder="이름" value="${escapeAttr(u.name)}">
+        <input type="text" class="editEmail" placeholder="이메일" value="${escapeAttr(u.email||'')}">
+        <button class="btnSaveEditUser" data-id="${escapeAttr(id)}">저장</button>
+        <button class="btnCancelEditUser" data-id="${escapeAttr(id)}">취소</button>
+      </div>
+    </div>`;
+  }).join('');
+
   container.querySelectorAll('.btnRemoveUser').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.id;
@@ -1036,24 +1083,54 @@ function renderUserList(){
         showToast('최소 1명은 남아 있어야 합니다.');
         return;
       }
-      if(!confirm(`${USERS[id]} (${id}) 사용자를 삭제할까요?`)) return;
+      if(!confirm(`${USERS[id].name} (${id}) 사용자를 삭제할까요?`)) return;
       delete USERS[id];
       saveUsers();
       renderUserList();
       showToast('사용자가 삭제되었습니다.');
     });
   });
+
+  container.querySelectorAll('.btnEditUser').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const row = btn.closest('.user-row');
+      row.querySelector('.user-row-view').style.display = 'none';
+      row.querySelector('.user-row-edit').style.display = 'flex';
+    });
+  });
+  container.querySelectorAll('.btnCancelEditUser').forEach(btn=>{
+    btn.addEventListener('click', ()=> renderUserList());
+  });
+  container.querySelectorAll('.btnSaveEditUser').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const row = btn.closest('.user-row');
+      const name = row.querySelector('.editName').value.trim();
+      const email = row.querySelector('.editEmail').value.trim();
+      if(!name){
+        showToast('이름을 입력해 주세요.');
+        return;
+      }
+      USERS[id] = { name, email };
+      saveUsers();
+      renderUserList();
+      showToast('사용자 정보가 수정되었습니다.');
+    });
+  });
 }
 
 document.getElementById('btnAddUser').addEventListener('click', addUserFromForm);
-document.getElementById('newUserName').addEventListener('keydown', e=>{ if(e.key==='Enter') addUserFromForm(); });
-document.getElementById('newUserId').addEventListener('keydown', e=>{ if(e.key==='Enter') addUserFromForm(); });
+['newUserName','newUserId','newUserEmail'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') addUserFromForm(); });
+});
 
 function addUserFromForm(){
   const idInput = document.getElementById('newUserId');
   const nameInput = document.getElementById('newUserName');
+  const emailInput = document.getElementById('newUserEmail');
   const id = idInput.value.trim().toUpperCase();
   const name = nameInput.value.trim();
+  const email = emailInput.value.trim();
 
   if(id.length !== 5){
     showToast('사번 ID는 5자리로 입력해 주세요.');
@@ -1067,10 +1144,11 @@ function addUserFromForm(){
     showToast('이미 등록된 ID입니다.');
     return;
   }
-  USERS[id] = name;
+  USERS[id] = { name, email };
   saveUsers();
   idInput.value = '';
   nameInput.value = '';
+  emailInput.value = '';
   renderUserList();
   showToast(`${name} (${id}) 님이 추가되었습니다.`);
 }
@@ -1231,7 +1309,16 @@ async function downloadPdf(){
    pre-filled with recipient/subject/body. The actual "from"
    address is whichever Google account is signed into the Gmail
    app — attach the just-downloaded PDF there and send.
+
+   Recipients: 3 fixed team/client addresses, plus the currently
+   logged-in user's own address (so they get a copy too) — 4 total.
 ========================================================= */
+const FIXED_RECIPIENTS = [
+  'operation@kardian.co.kr',
+  'sa_eastspring@shinhan.com',
+  '00kwang@gmail.com'
+];
+
 document.getElementById('btnSendMail').addEventListener('click', sendMail);
 
 async function sendMail(){
@@ -1241,13 +1328,24 @@ async function sendMail(){
   const subject = `[신한펀드파트너스] NAV and Valuation review_${dateCompact(data.date)}`;
   const body = '안녕하세요. 신한펀드파트너스입니다.\nNAV and Valuation review 보내드립니다.\n감사합니다.';
 
-  const mailto = `mailto:${encodeURIComponent(settings.to||'')}`
+  const recipients = [...FIXED_RECIPIENTS];
+  const selfEmail = (currentUser && currentUser.email || '').trim();
+  if(selfEmail && !recipients.some(r => r.toLowerCase() === selfEmail.toLowerCase())){
+    recipients.push(selfEmail);
+  }
+
+  const mailto = `mailto:${encodeURIComponent(recipients.join(','))}`
     + `?subject=${encodeURIComponent(subject)}`
     + `&body=${encodeURIComponent(body)}`;
 
   // Small delay so the download has a moment to start before navigating away.
   setTimeout(()=>{ window.location.href = mailto; }, 400);
-  showToast('PDF 저장 완료 — Gmail을 여는 중...');
+
+  if(!selfEmail){
+    showToast('PDF 저장 완료 — Gmail을 여는 중... (본인 이메일 미등록: 3곳으로만 발송돼요)');
+  } else {
+    showToast('PDF 저장 완료 — Gmail을 여는 중...');
+  }
 }
 
 /* =========================================================
@@ -1282,15 +1380,18 @@ function init(){
 
 /* =========================================================
    14. LOGIN — 사번 5자리 ID
+   Login is required on every visit (no persisted auto-login):
+   the logged-in user only lives in memory (`currentUser`) for
+   the current tab session. Closing/reopening the app, or a
+   fresh visit to the URL, always shows the ID gate again.
 ========================================================= */
 const DEFAULT_USERS = {
-  '71213': '김광석',
-  'F1211': '남윤호',
-  'J0919': '최한민',
-  'Q0103': '박인석',
-  'Q0601': '장동현'
+  '71213': { name: '김광석', email: 'kskim01@shinhan.com' },
+  'F1211': { name: '남윤호', email: '' },
+  'J0919': { name: '최한민', email: '' },
+  'Q0103': { name: '박인석', email: '' },
+  'Q0601': { name: '장동현', email: '' }
 };
-const LS_USER = 'kardian_user_v1';
 const LS_USERS = 'kardian_users_v1';
 
 function loadUsers(){
@@ -1299,27 +1400,57 @@ function loadUsers(){
     if(raw){
       const parsed = JSON.parse(raw);
       if(parsed && typeof parsed === 'object' && Object.keys(parsed).length){
-        return parsed;
+        // Migrate old format (id -> name string) to the new { name, email } shape.
+        const migrated = {};
+        Object.keys(parsed).forEach(id=>{
+          migrated[id] = (typeof parsed[id] === 'string')
+            ? { name: parsed[id], email: '' }
+            : { name: parsed[id].name || '', email: parsed[id].email || '' };
+        });
+        return migrated;
       }
     }
   }catch(e){}
-  return {...DEFAULT_USERS};
-}
-function saveUsers(){
-  localStorage.setItem(LS_USERS, JSON.stringify(USERS));
+  return JSON.parse(JSON.stringify(DEFAULT_USERS));
 }
 let USERS = loadUsers();
 
-function getCurrentUser(){
-  try{
-    const raw = localStorage.getItem(LS_USER);
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
-  return null;
+// Persists the user directory locally, and — when team sharing is
+// connected — pushes it to Firestore so every other logged-in device
+// picks up the change in real time (see subscribeUsersCloud below).
+function saveUsers(){
+  localStorage.setItem(LS_USERS, JSON.stringify(USERS));
+  if(db){
+    db.collection('meta').doc('users').set({ users: USERS, updatedAt: Date.now() })
+      .catch(e => console.error('사용자 목록 클라우드 저장 실패', e));
+  }
 }
-function setCurrentUser(id, name){
-  localStorage.setItem(LS_USER, JSON.stringify({id, name}));
+
+let usersUnsub = null;
+function subscribeUsersCloud(){
+  if(!db) return;
+  if(usersUnsub){ usersUnsub(); usersUnsub = null; }
+  usersUnsub = db.collection('meta').doc('users').onSnapshot(doc=>{
+    if(doc.exists){
+      const remote = doc.data();
+      if(remote && remote.users){
+        USERS = remote.users;
+        localStorage.setItem(LS_USERS, JSON.stringify(USERS));
+        // Keep the settings screen in sync if it's open right now.
+        if(document.getElementById('viewSettings').style.display !== 'none'){
+          renderUserList();
+        }
+      }
+    } else {
+      // First time this Firebase project is used for users: seed it
+      // with whatever this device currently has.
+      db.collection('meta').doc('users').set({ users: USERS, updatedAt: Date.now() }).catch(()=>{});
+    }
+  }, err => console.error('사용자 목록 동기화 오류', err));
 }
+
+let currentUser = null; // in-memory only — intentionally not persisted
+
 function updateUserChip(user){
   const chip = document.getElementById('userChip');
   if(user){
@@ -1334,34 +1465,33 @@ document.getElementById('loginBtn').addEventListener('click', attemptLogin);
 document.getElementById('loginIdInput').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
 function attemptLogin(){
   const raw = document.getElementById('loginIdInput').value.trim().toUpperCase();
-  const name = USERS[raw];
+  const u = USERS[raw];
   const err = document.getElementById('loginError');
-  if(!name){
+  if(!u){
     err.style.display = 'block';
     return;
   }
   err.style.display = 'none';
-  setCurrentUser(raw, name);
+  currentUser = { id: raw, name: u.name, email: u.email || '' };
   document.getElementById('loginGate').style.display = 'none';
-  updateUserChip({id:raw, name});
+  updateUserChip(currentUser);
   init();
 }
 
 document.getElementById('switchUserBtn').addEventListener('click', ()=>{
-  localStorage.removeItem(LS_USER);
   location.reload();
 });
 
-// Entry point: show the login gate until a recognized user is on file.
-const existingUser = getCurrentUser();
-if(existingUser){
-  document.getElementById('loginGate').style.display = 'none';
-  updateUserChip(existingUser);
-  init();
-} else {
-  updateUserChip(null);
-}
+// Entry point: login is always required — show the ID gate on every load.
+// Firebase is connected right away (even before login) so that the shared
+// user directory is up to date by the time someone types their ID — this
+// matters for a device logging in for the first time after an admin added
+// a new user elsewhere.
+updateUserChip(null);
+document.getElementById('loginGate').style.display = 'flex';
+connectFirebase();
 </script>
+
 
 </body>
 </html>
