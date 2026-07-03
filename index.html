@@ -1374,7 +1374,29 @@ function init(){
   initFirebase();
 
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      // Ask the browser to check for a newer sw.js on every app open —
+      // this is what pulls in freshly deployed versions on installed PWAs.
+      reg.update().catch(()=>{});
+      reg.addEventListener('updatefound', ()=>{
+        const nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', ()=>{
+          if(nw.state === 'installed' && navigator.serviceWorker.controller){
+            showToast('새 버전이 적용되었습니다. 새로고침하면 반영돼요.');
+          }
+        });
+      });
+    }).catch(()=>{});
+
+    // When the new service worker takes control mid-session, reload once so
+    // the page runs the latest code (guard prevents a reload loop).
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(refreshed) return;
+      refreshed = true;
+      location.reload();
+    });
   }
 }
 
