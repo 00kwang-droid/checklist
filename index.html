@@ -675,13 +675,23 @@ function subscribeCloudActive(){
   if(fsUnsub){ fsUnsub(); fsUnsub = null; }
   fsUnsub = db.collection('checklists').doc(ACTIVE_KEY).onSnapshot(doc=>{
     if(viewKey !== ACTIVE_KEY) return; // user has since navigated to an archived day
+    // Skip our own optimistic echo (the local write reflected back before the
+    // server has confirmed it) — we already have this data, and re-applying
+    // it mid-keystroke would just disrupt whatever the user is typing.
+    if(doc.metadata.hasPendingWrites) return;
     if(doc.exists){
-      const remote = doc.data();
-      if(!data || remote.updatedAt > (data.updatedAt||0)){
-        data = remote;
-        saveLocalData();
-        renderAll();
-      }
+      // A confirmed snapshot from the server is always the authoritative,
+      // most-recent committed state — adopt it unconditionally. (Previously
+      // this only applied when remote.updatedAt was newer than the local
+      // copy's updatedAt, both of which are set from each device's own
+      // clock. Two phones/laptops rarely agree on the exact time, so a
+      // device with a slightly-ahead clock could permanently reject every
+      // update from teammates until it happened to be open at the same
+      // moment as someone else. Trusting the server snapshot removes the
+      // clock-skew dependency entirely.)
+      data = doc.data();
+      saveLocalData();
+      renderAll();
     } else {
       db.collection('checklists').doc(ACTIVE_KEY).set(data);
     }
@@ -692,15 +702,14 @@ function subscribeCloudActive(){
 }
 function fetchCloudOnce(key){
   if(!db) return;
+  // Archived days are read-only, so there's no local pending edit to
+  // protect — the server copy (if any) is always the one to show.
   db.collection('checklists').doc(key).get().then(doc=>{
     if(viewKey !== key) return;
     if(doc.exists){
-      const remote = doc.data();
-      if(!data || remote.updatedAt > (data.updatedAt||0)){
-        data = remote;
-        saveLocalData();
-        renderAll();
-      }
+      data = doc.data();
+      saveLocalData();
+      renderAll();
     }
   }).catch(e=>console.error(e));
 }

@@ -1,4 +1,4 @@
-// Kardian Daily Checklist — service worker (v2)
+// Kardian Daily Checklist — service worker (v3)
 // Caches the app shell so the PWA can be installed and opened offline.
 // Data (checklist entries) live in localStorage / Firestore, not in this cache.
 //
@@ -8,8 +8,14 @@
 // Now every open fetches the latest deployed version first, and the cache is
 // only used as an offline fallback. Static assets (icons, manifest) stay
 // cache-first since they rarely change.
+//
+// v3 change: bumped cache name only, to make sure every installed device
+// picks up the index.html fix for cross-device sync (a device's own clock
+// was previously used to decide whether to accept a teammate's edit, which
+// meant edits only reliably showed up when both people happened to have the
+// app open at the same time).
 
-const CACHE_NAME = 'kardian-checklist-v2';
+const CACHE_NAME = 'kardian-checklist-v3';
 const APP_SHELL = [
   './',
   './index.html',
